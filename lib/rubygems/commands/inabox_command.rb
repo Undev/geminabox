@@ -1,4 +1,4 @@
-require 'yaml'
+require 'rubygems/command'
 
 class Gem::Commands::InaboxCommand < Gem::Command
   def description
@@ -25,59 +25,37 @@ class Gem::Commands::InaboxCommand < Gem::Command
     end
   end
 
+  def last_minute_requires!
+    require 'yaml'
+    require File.expand_path("../../../geminabox_client.rb", __FILE__)
+  end
+
   def execute
+    last_minute_requires!
     return configure if options[:configure]
-    setup
-    send_gem
-  end
-
-  def setup
-    @gemfile = if options[:args].size == 0
-      find_gem
-    else
-      get_one_gem_name
-    end
     configure unless geminabox_host
-  end
 
-  def find_gem
-    say "You didn't specify a gem, looking for one in pkg..."
-    path, directory = File.split(Dir.pwd)
-    possible_gems = Dir.glob("pkg/#{directory}-*.gem")
-    raise Gem::CommandLineError, "Couldn't find a gem in pkg, please specify a gem name on the command line (e.g. gem inabox GEMNAME)" unless possible_gems.any?
-    name_regexp = Regexp.new("^pkg/#{directory}-")
-    possible_gems.sort_by{ |a| Gem::Version.new(a.sub(name_regexp,'')) }.last
-  end
-
-  def send_gem
-    say "Pushing #{File.split(@gemfile).last} to #{geminabox_host}..."
-
-    File.open(@gemfile, "rb") do |file|
-      url = URI.parse(geminabox_host)
-      request_body, request_headers = Multipart::MultipartPost.new.prepare_query("file" => file)
-
-      proxy.start(url.host, url.port) {|con|
-        req = Net::HTTP::Post.new('/upload', request_headers)
-        req.basic_auth(url.user, url.password) if url.user
-        handle_response(con.request(req, request_body))
-      }
-    end
-  end
-
-  def proxy
-    if proxy_info = ENV['http_proxy'] || ENV['HTTP_PROXY'] and uri = URI.parse(proxy_info)
-      Net::HTTP::Proxy(uri.host, uri.port, uri.user, uri.password)
+    if options[:args].size == 0
+      say "You didn't specify a gem, looking for one in . and in ./pkg/..."
+      gemfiles = [GeminaboxClient::GemLocator.find_gem(Dir.pwd)]
     else
-      Net::HTTP
+      gemfiles = get_all_gem_names
     end
+
+    send_gems(gemfiles)
   end
 
-  def handle_response(response)
-    case response
-    when Net::HTTPSuccess, Net::HTTPRedirection
-      puts response.body
-    else
-      response.error!
+  def send_gems(gemfiles)
+    client = GeminaboxClient.new(geminabox_host)
+
+    gemfiles.each do |gemfile|
+      say "Pushing #{File.basename(gemfile)} to #{client.url}..."
+      begin
+        say client.push(gemfile)
+      rescue GeminaboxClient::Error => e
+        alert_error e.message
+        terminate_interaction(1)
+      end
     end
   end
 
@@ -106,51 +84,4 @@ class Gem::Commands::InaboxCommand < Gem::Command
     end
   end
 
-  module Multipart
-    require 'net/http'
-    require 'cgi'
-
-    class Param
-      attr_accessor :k, :v
-      def initialize( k, v )
-        @k = k
-        @v = v
-      end
-
-      def to_multipart
-        return "Content-Disposition: form-data; name=\"#{k}\"\r\n\r\n#{v}\r\n"
-      end
-    end
-
-    class FileParam
-      attr_accessor :k, :filename, :content
-      def initialize( k, filename, content )
-        @k = k
-        @filename = filename
-        @content = content
-      end
-
-      def to_multipart
-        return "Content-Disposition: form-data; name=\"#{k}\"; filename=\"#{filename}\"\r\n" + "Content-Transfer-Encoding: binary\r\n" + "Content-Type: application/octet-stream\r\n\r\n" + content + "\r\n"
-      end
-    end
-
-    class MultipartPost
-      BOUNDARY = 'tarsiers-rule0000'
-      HEADER = {"Content-type" => "multipart/form-data, boundary=" + BOUNDARY + " "}
-
-      def prepare_query(params)
-        fp = []
-        params.each {|k,v|
-          if v.respond_to?(:read)
-            fp.push(FileParam.new(k, v.path, v.read))
-          else
-            fp.push(Param.new(k,v))
-          end
-        }
-        query = fp.collect {|p| "--" + BOUNDARY + "\r\n" + p.to_multipart }.join("") + "--" + BOUNDARY + "--"
-        return query, HEADER
-      end
-    end  
-  end
 end

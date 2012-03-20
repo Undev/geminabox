@@ -1,8 +1,6 @@
-require File.expand_path('../lib/geminabox/version', __FILE__)
-
 Gem::Specification.new do |s|
   s.name              = 'geminabox'
-  s.version           = GeminaboxVersion
+  s.version           = '9999.0.0'
   s.summary           = 'Really simple rubygem hosting'
   s.description       = 'A sinatra based gem hosting app, with client side gem push style functionality.'
   s.author            = 'Tom Lea'
@@ -20,6 +18,4 @@ Gem::Specification.new do |s|
   s.add_dependency('builder')
   s.add_dependency('httpclient')
   s.add_development_dependency('rake')
-  s.add_development_dependency('rack-test')
-  s.add_development_dependency('minitest')
 end

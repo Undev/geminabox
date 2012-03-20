@@ -1,17 +1,40 @@
 require "rubygems"
-require "rake/gempackagetask"
-require "rake/rdoctask"
+require "rubygems/package_task"
 
-task :default => :package
-
-Rake::GemPackageTask.new(eval(File.read("geminabox.gemspec"))) do |pkg|
+Gem::PackageTask.new(eval(File.read("geminabox.gemspec"))) do |pkg|
 end
 
-Rake::RDocTask.new do |rd|
-  rd.main = "README.markdown"
-  rd.rdoc_files.include("README.markdown", "lib/**/*.rb")
-  rd.rdoc_dir = "rdoc"
+desc 'Clear out generated packages'
+task :clean => [:clobber_package]
+
+require 'rake/testtask'
+
+Rake::TestTask.new("test:integration") do |t|
+  t.libs << "test" << "lib"
+  t.pattern = "test/integration/**/*_test.rb"
 end
 
-desc 'Clear out RDoc and generated packages'
-task :clean => [:clobber_rdoc, :clobber_package]
+Rake::TestTask.new("test:smoke:paranoid") do |t|
+  t.libs << "test" << "lib"
+  t.pattern = "test/smoke_test.rb"
+end
+
+desc "Run the smoke tests, faster."
+task "test:smoke" do
+  $:.unshift("lib").unshift("test")
+  require "smoke_test"
+end
+
+Rake::TestTask.new("test:requests") do |t|
+  t.libs << "test" << "lib"
+  t.pattern = "test/requests/**/*_test.rb"
+end
+
+Rake::TestTask.new("test:units") do |t|
+  t.libs << "test" << "lib"
+  t.pattern = "test/units/**/*_test.rb"
+end
+
+task :st => "test:smoke"
+task :test => ["test:units", "test:requests", "test:integration"]
+task :default => :test

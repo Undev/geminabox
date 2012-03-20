@@ -1,2 +1,5 @@
 pkg/
 *.swp
+.DS_Store
+tmp/restart.txt
+Gemfile.lock
