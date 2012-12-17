@@ -164,6 +164,8 @@ HTML
       end
     end
     disk_cache.flush
+    @@disk_cache = nil
+    @@loaded_gems = nil
   end
 
   def indexer
@@ -175,11 +177,11 @@ HTML
   end
 
   def disk_cache
-    @disk_cache = Geminabox::DiskCache.new(File.join(settings.data, "_cache"))
+    @@disk_cache = Geminabox::DiskCache.new(File.join(settings.data, "_cache"))
   end
 
   def load_gems
-    @loaded_gems ||=
+    @@loaded_gems ||=
       %w(specs prerelease_specs).inject(GemVersionCollection.new){|gems, specs_file_type|
         specs_file_path = File.join(settings.data, "#{specs_file_type}.#{Gem.marshal_version}.gz")
         if File.exists?(specs_file_path)
